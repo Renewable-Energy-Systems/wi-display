@@ -1,4 +1,3 @@
-// kiosk_shell.dart
 import 'package:flutter/material.dart';
 import 'web_logs_screen.dart';
 import 'home_screen.dart';
@@ -13,24 +12,110 @@ class KioskShell extends StatefulWidget {
 
 class _KioskShellState extends State<KioskShell> {
   late final PageController _controller;
+  int _pageIndex = 1; // start at HomeScreen (center)
 
   @override
   void initState() {
     super.initState();
-    _controller = PageController(initialPage: 1); // center = HomeScreen
+    _controller = PageController(initialPage: _pageIndex);
+  }
+
+  void _goTo(int index) {
+    if (index < 0 || index > 2) return;
+    setState(() {
+      _pageIndex = index;
+    });
+    _controller.animateToPage(
+      _pageIndex,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeInOut,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return PageView(
-      controller: _controller,
-      scrollDirection: Axis.horizontal,
-      physics: const PageScrollPhysics(),
-      children: const [
-        WebLogsScreen(), // swipe LEFT
-        HomeScreen(), // center
-        WIListScreen(), // swipe RIGHT
-      ],
+    return Scaffold(
+      // We’ll use a Stack so we can float nav arrows over the pages
+      body: Stack(
+        children: [
+          // The 3 main pages
+          PageView(
+            controller: _controller,
+            physics:
+                const NeverScrollableScrollPhysics(), // <- DISABLE swipe gestures
+            children: const [
+              WebLogsScreen(), // LEFT  (index 0)
+              HomeScreen(), // MIDDLE(index 1)
+              WIListScreen(), // RIGHT (index 2)
+            ],
+          ),
+
+          // LEFT arrow (to go to previous page)
+          if (_pageIndex > 0)
+            Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
+              child: _NavButton(
+                alignment: Alignment.centerLeft,
+                icon: Icons.chevron_left_rounded,
+                onTap: () => _goTo(_pageIndex - 1),
+              ),
+            ),
+
+          // RIGHT arrow (to go to next page)
+          if (_pageIndex < 2)
+            Positioned(
+              right: 0,
+              top: 0,
+              bottom: 0,
+              child: _NavButton(
+                alignment: Alignment.centerRight,
+                icon: Icons.chevron_right_rounded,
+                onTap: () => _goTo(_pageIndex + 1),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Big translucent tap target on edges of the screen
+class _NavButton extends StatelessWidget {
+  final Alignment alignment;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _NavButton({
+    super.key,
+    required this.alignment,
+    required this.icon,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque, // entire box clickable
+      onTap: onTap,
+      child: Container(
+        width: 80, // fat touch target for operators with gloves
+        alignment: alignment,
+        // subtle gradient so operator sees it's interactive, but not ugly
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: alignment == Alignment.centerLeft
+                ? Alignment.centerLeft
+                : Alignment.centerRight,
+            end: alignment == Alignment.centerLeft
+                ? Alignment.centerRight
+                : Alignment.centerLeft,
+            colors: [Colors.black.withOpacity(0.08), Colors.transparent],
+          ),
+        ),
+        child: Icon(icon, size: 48, color: Colors.black.withOpacity(0.4)),
+      ),
     );
   }
 }
