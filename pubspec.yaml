@@ -38,7 +38,8 @@ dependencies:
   webview_flutter: ^4.8.0    # to load https://logi.weberq.in
   chewie: ^1.7.5             # nice controls wrapper
   video_player: ^2.9.2       # underlying player
-  wakelock_plus: ^1.2.5      # keep screen awake in kiosk mode
+  wakelock_plus: ^1.2.5      
+  permission_handler: ^11.3.1
 
 dev_dependencies:
   flutter_test:

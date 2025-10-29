@@ -1,13 +1,14 @@
 import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class VideoPlayerScreen extends StatefulWidget {
   final String title;
-  final String videoPath; // "http...", "file:///...", "assets/..."
+  final String
+  videoPath; // "file:///...", "/storage/...mp4", "assets/...mp4", or "http..."
 
   const VideoPlayerScreen({
     super.key,
@@ -23,48 +24,84 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   VideoPlayerController? _videoController;
   ChewieController? _chewieController;
   bool _ready = false;
+  String? _errorText;
 
   @override
   void initState() {
     super.initState();
-    // keep the tablet awake during playback
     WakelockPlus.enable();
-    _setupControllers();
+    _init();
   }
 
-  Future<void> _setupControllers() async {
-    // 1. choose controller
-    if (widget.videoPath.startsWith('http')) {
-      _videoController = VideoPlayerController.networkUrl(
-        Uri.parse(widget.videoPath),
-      );
-    } else if (widget.videoPath.startsWith('file://')) {
-      final file = File(Uri.parse(widget.videoPath).toFilePath());
-      _videoController = VideoPlayerController.file(file);
-    } else if (widget.videoPath.startsWith('assets/')) {
-      _videoController = VideoPlayerController.asset(widget.videoPath);
-    } else {
-      // assume raw file path like /storage/emulated/0/...
-      _videoController = VideoPlayerController.file(File(widget.videoPath));
+  Future<void> _init() async {
+    // 1. Ask for storage permission if we are trying to read from external storage
+    final needsStorage =
+        widget.videoPath.startsWith('/storage/') ||
+        widget.videoPath.startsWith('file:///storage');
+
+    if (needsStorage) {
+      final status = await Permission.storage.request();
+      if (!status.isGranted) {
+        setState(() {
+          _errorText = 'Storage permission denied.\nCannot open video.';
+        });
+        return;
+      }
     }
 
-    // 2. init video
-    await _videoController!.initialize();
+    // 2. Build the proper controller
+    try {
+      _videoController = await _buildController(widget.videoPath);
 
-    // 3. wrap with Chewie
-    _chewieController = ChewieController(
-      videoPlayerController: _videoController!,
-      autoPlay: true,
-      looping: false,
-      allowFullScreen: true,
-      allowPlaybackSpeedChanging: false,
-      allowMuting: true,
-      showControlsOnInitialize: true,
-    );
+      // 3. Initialize
+      await _videoController!.initialize();
 
-    setState(() {
-      _ready = true;
-    });
+      // 4. Wrap Chewie
+      _chewieController = ChewieController(
+        videoPlayerController: _videoController!,
+        autoPlay: true,
+        looping: false,
+        allowFullScreen: true,
+        allowPlaybackSpeedChanging: false,
+        allowMuting: true,
+        showControlsOnInitialize: true,
+      );
+
+      setState(() {
+        _ready = true;
+      });
+    } catch (e) {
+      setState(() {
+        _errorText = 'Could not load video:\n$e';
+      });
+    }
+  }
+
+  Future<VideoPlayerController> _buildController(String path) async {
+    // network URL?
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      return VideoPlayerController.networkUrl(Uri.parse(path));
+    }
+
+    // file:// URI?
+    if (path.startsWith('file://')) {
+      final file = File(Uri.parse(path).toFilePath());
+      return VideoPlayerController.file(file);
+    }
+
+    // absolute device path? (/storage/emulated/0/...)
+    if (path.startsWith('/storage/')) {
+      final file = File(path);
+      return VideoPlayerController.file(file);
+    }
+
+    // bundled asset?
+    if (path.startsWith('assets/')) {
+      return VideoPlayerController.asset(path);
+    }
+
+    // fallback: try raw as file
+    return VideoPlayerController.file(File(path));
   }
 
   @override
@@ -77,18 +114,38 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final header = AppBar(
+      backgroundColor: Colors.black,
+      foregroundColor: Colors.white,
+      title: Text(widget.title, style: const TextStyle(color: Colors.white)),
+    );
+
+    if (_errorText != null) {
+      return Scaffold(
+        backgroundColor: Colors.black,
+        appBar: header,
+        body: Center(
+          child: Text(
+            _errorText!,
+            style: const TextStyle(color: Colors.redAccent, fontSize: 16),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+
+    if (!_ready || _chewieController == null) {
+      return Scaffold(
+        backgroundColor: Colors.black,
+        appBar: header,
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-        title: Text(widget.title, style: const TextStyle(color: Colors.white)),
-      ),
-      body: Center(
-        child: _ready && _chewieController != null
-            ? Chewie(controller: _chewieController!)
-            : const CircularProgressIndicator(),
-      ),
+      appBar: header,
+      body: Center(child: Chewie(controller: _chewieController!)),
     );
   }
 }

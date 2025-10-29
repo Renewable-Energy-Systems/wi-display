@@ -14,7 +14,8 @@ class WIListScreen extends StatelessWidget {
         title: 'Anode Pellet Pressing',
         description:
             'Die setup, press tonnage, eject handling. Follow dry-box protocol.',
-        videoPath: 'file:///storage/emulated/0/kiosk_videos/anode_press.mp4',
+        videoPath:
+            'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
       ),
       WorkInstruction(
         id: 'WI-STACK-ASM-002',
