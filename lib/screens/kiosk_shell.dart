@@ -12,12 +12,21 @@ class KioskShell extends StatefulWidget {
 
 class _KioskShellState extends State<KioskShell> {
   late final PageController _controller;
-  int _pageIndex = 1; // start at HomeScreen (center)
+  late final List<Widget> _pages; // cache pages
+  int _pageIndex = 1; // start in the middle (Home)
 
   @override
   void initState() {
     super.initState();
+
     _controller = PageController(initialPage: _pageIndex);
+
+    // IMPORTANT: create these widgets ONCE
+    _pages = const [
+      WebLogsScreen(), // index 0 (left)
+      HomeScreen(), // index 1 (center)
+      WIListScreen(), // index 2 (right)
+    ];
   }
 
   void _goTo(int index) {
@@ -35,22 +44,16 @@ class _KioskShellState extends State<KioskShell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // We’ll use a Stack so we can float nav arrows over the pages
       body: Stack(
         children: [
-          // The 3 main pages
           PageView(
             controller: _controller,
             physics:
-                const NeverScrollableScrollPhysics(), // <- DISABLE swipe gestures
-            children: const [
-              WebLogsScreen(), // LEFT  (index 0)
-              HomeScreen(), // MIDDLE(index 1)
-              WIListScreen(), // RIGHT (index 2)
-            ],
+                const NeverScrollableScrollPhysics(), // no swipe, use arrows
+            children: _pages,
           ),
 
-          // LEFT arrow (to go to previous page)
+          // LEFT arrow
           if (_pageIndex > 0)
             Positioned(
               left: 0,
@@ -63,7 +66,7 @@ class _KioskShellState extends State<KioskShell> {
               ),
             ),
 
-          // RIGHT arrow (to go to next page)
+          // RIGHT arrow
           if (_pageIndex < 2)
             Positioned(
               right: 0,
@@ -81,7 +84,6 @@ class _KioskShellState extends State<KioskShell> {
   }
 }
 
-/// Big translucent tap target on edges of the screen
 class _NavButton extends StatelessWidget {
   final Alignment alignment;
   final IconData icon;
@@ -97,12 +99,11 @@ class _NavButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      behavior: HitTestBehavior.opaque, // entire box clickable
+      behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Container(
-        width: 80, // fat touch target for operators with gloves
+        width: 80,
         alignment: alignment,
-        // subtle gradient so operator sees it's interactive, but not ugly
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: alignment == Alignment.centerLeft
