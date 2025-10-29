@@ -44,7 +44,7 @@ class HomeScreen extends StatelessWidget {
           child: Column(
             children: [
               // ===== Top App Bar =====
-              _TopHeader(blueMain: blueMain),
+              const _TopHeader(blueMain: blueMain),
 
               const SizedBox(height: 16),
 
@@ -62,72 +62,73 @@ class HomeScreen extends StatelessWidget {
                   ),
                   child: LayoutBuilder(
                     builder: (context, constraints) {
-                      // We want two columns: left card (400w) and right card (~380w)
-                      // On tablet landscape this will be fine in a Row.
-                      // If screen gets too narrow, we'll wrap to Column just to avoid overflow.
+                      // Two columns in landscape.
+                      // Stack vertically if tablet is too narrow.
                       final isNarrow = constraints.maxWidth < 780;
-                      final inner = isNarrow
-                          ? Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _SensorCard(
-                                  headingText: headingText,
-                                  labelText: labelText,
-                                  valueText: valueText,
-                                  captionText: captionText,
-                                  cardBorder: cardBorder,
-                                  workstationName: workstationName,
-                                  probeId: probeId,
-                                  calibrationDate: calibrationDate,
-                                  calibrationDue: calibrationDue,
-                                  updatedAt: updatedAt,
-                                ),
-                                const SizedBox(height: 24),
-                                _DewPointCard(
-                                  dewBg: dewBg,
-                                  dewBorder: dewBorder,
-                                  dewLabelText: dewLabelText,
-                                  dewBigNumber: dewBigNumber,
-                                  liveGreen: liveGreen,
-                                  dewPointDisplay: dewPointDisplay,
-                                ),
-                              ],
-                            )
-                          : Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                // Left card ~400 wide
-                                Flexible(
-                                  flex: 4,
-                                  child: _SensorCard(
-                                    headingText: headingText,
-                                    labelText: labelText,
-                                    valueText: valueText,
-                                    captionText: captionText,
-                                    cardBorder: cardBorder,
-                                    workstationName: workstationName,
-                                    probeId: probeId,
-                                    calibrationDate: calibrationDate,
-                                    calibrationDue: calibrationDue,
-                                    updatedAt: updatedAt,
-                                  ),
-                                ),
-                                const SizedBox(width: 24),
-                                // Right card ~380 wide
-                                Flexible(
-                                  flex: 4,
-                                  child: _DewPointCard(
-                                    dewBg: dewBg,
-                                    dewBorder: dewBorder,
-                                    dewLabelText: dewLabelText,
-                                    dewBigNumber: dewBigNumber,
-                                    liveGreen: liveGreen,
-                                    dewPointDisplay: dewPointDisplay,
-                                  ),
-                                ),
-                              ],
-                            );
-                      return inner;
+
+                      if (isNarrow) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _SensorCard(
+                              headingText: headingText,
+                              labelText: labelText,
+                              valueText: valueText,
+                              captionText: captionText,
+                              cardBorder: cardBorder,
+                              workstationName: workstationName,
+                              probeId: probeId,
+                              calibrationDate: calibrationDate,
+                              calibrationDue: calibrationDue,
+                              updatedAt: updatedAt,
+                            ),
+                            const SizedBox(height: 24),
+                            _DewPointCard(
+                              dewBg: dewBg,
+                              dewBorder: dewBorder,
+                              dewLabelText: dewLabelText,
+                              dewBigNumber: dewBigNumber,
+                              liveGreen: liveGreen,
+                              dewPointDisplay: dewPointDisplay,
+                            ),
+                          ],
+                        );
+                      }
+
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Left card (~400 wide)
+                          Flexible(
+                            flex: 4,
+                            child: _SensorCard(
+                              headingText: headingText,
+                              labelText: labelText,
+                              valueText: valueText,
+                              captionText: captionText,
+                              cardBorder: cardBorder,
+                              workstationName: workstationName,
+                              probeId: probeId,
+                              calibrationDate: calibrationDate,
+                              calibrationDue: calibrationDue,
+                              updatedAt: updatedAt,
+                            ),
+                          ),
+                          const SizedBox(width: 24),
+                          // Right card (~380 wide)
+                          Flexible(
+                            flex: 4,
+                            child: _DewPointCard(
+                              dewBg: dewBg,
+                              dewBorder: dewBorder,
+                              dewLabelText: dewLabelText,
+                              dewBigNumber: dewBigNumber,
+                              liveGreen: liveGreen,
+                              dewPointDisplay: dewPointDisplay,
+                            ),
+                          ),
+                        ],
+                      );
                     },
                   ),
                 ),
@@ -163,11 +164,11 @@ class _TopHeader extends StatelessWidget {
       decoration: BoxDecoration(
         color: blueMain,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          // SVG filter: subtle shadow (0,2,4, 0.12)
+        boxShadow: const [
+          // subtle header shadow
           BoxShadow(
-            color: const Color(0x1F1B2B65), // rgba-ish: #1b2b65 with ~0.12
-            offset: const Offset(0, 2),
+            color: Color(0x1F1B2B65), // #1b2b65 @ ~12%
+            offset: Offset(0, 2),
             blurRadius: 4,
           ),
         ],
@@ -175,8 +176,7 @@ class _TopHeader extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
-          // Left: blue circle icon that mimics the <image> in SVG.
-          // We'll fake a circular brand badge here.
+          // left logo block
           Container(
             height: 56,
             width: 56,
@@ -202,12 +202,12 @@ class _TopHeader extends StatelessWidget {
 
           const SizedBox(width: 16),
 
-          // Center title
-          Expanded(
+          // center title
+          const Expanded(
             child: Text(
               'Renewable Energy Systems Limited',
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 color: Colors.white,
                 fontSize: 28,
                 fontWeight: FontWeight.w700,
@@ -218,8 +218,8 @@ class _TopHeader extends StatelessWidget {
             ),
           ),
 
-          // Right spacer (to balance left icon)
-          const SizedBox(width: 72), // same-ish width as icon+gap
+          // right spacer to visually balance the left logo
+          const SizedBox(width: 72),
         ],
       ),
     );
@@ -275,7 +275,7 @@ class _SensorCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      // ~400 x 336 in SVG
+      // SVG reference: ~400 x 336
       constraints: const BoxConstraints(
         minWidth: 320,
         maxWidth: 480,
@@ -283,7 +283,7 @@ class _SensorCard extends StatelessWidget {
       ),
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        // cardGrad in SVG was subtle white -> very light blue.
+        // very light diagonal gradient like the SVG card
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -292,9 +292,9 @@ class _SensorCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: cardBorder, width: 1),
         boxShadow: const [
-          // elev2 style
+          // light elevation
           BoxShadow(
-            color: Color.fromARGB(31, 27, 43, 101), // #1b2b65 @~0.12
+            color: Color.fromARGB(31, 27, 43, 101), // #1b2b65 @ ~0.12
             offset: Offset(0, 2),
             blurRadius: 4,
           ),
@@ -303,28 +303,23 @@ class _SensorCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Title
           Text('Sensor Information', style: _headingStyle),
           const SizedBox(height: 24),
 
-          // Info rows block
           _twoColRow('Workstation name:', workstationName),
           const SizedBox(height: 16),
+
           _twoColRow('Probe ID:', probeId),
           const SizedBox(height: 16),
+
           _twoColRow('Calibration Date:', calibrationDate),
           const SizedBox(height: 16),
+
           _twoColRow('Calibration Due:', calibrationDue),
           const SizedBox(height: 24),
 
-          // EXTRA: Glovebox status block (not in the SVG,
-          // but you said you'll show glovebox info later from API.
-          // I'm placing it here cleanly so it's ready.)
-          // Text('Glovebox Status:', style: _labelStyle),
-          // const SizedBox(height: 6),
           const Spacer(),
 
-          // Updated timestamp at bottom-left
           Text('Updated: $updatedAt', style: _captionStyle),
         ],
       ),
@@ -380,7 +375,7 @@ class _DewPointCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      // ~380 x 336 in SVG
+      // SVG reference: ~380 x 336
       constraints: const BoxConstraints(
         minWidth: 300,
         maxWidth: 480,
@@ -392,9 +387,9 @@ class _DewPointCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: dewBorder, width: 1),
         boxShadow: const [
-          // elev3: stronger shadow
+          // slightly stronger shadow like elevated card in SVG
           BoxShadow(
-            color: Color.fromARGB(41, 27, 43, 101), // #1b2b65 @~0.16
+            color: Color.fromARGB(41, 27, 43, 101), // #1b2b65 @ ~0.16
             offset: Offset(0, 8),
             blurRadius: 14,
           ),
@@ -402,10 +397,9 @@ class _DewPointCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          // Row with icon + "Dew Point"
+          // header row
           Row(
             children: [
-              // little droplet icon approximating SVG path
               Container(
                 width: 28,
                 height: 28,
@@ -413,10 +407,10 @@ class _DewPointCard extends StatelessWidget {
                   color: const Color(0xFF5A8DFF).withOpacity(0.12),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(
+                child: const Icon(
                   Icons.opacity_rounded,
                   size: 20,
-                  color: const Color(0xFF5A8DFF),
+                  color: Color(0xFF5A8DFF),
                 ),
               ),
               const SizedBox(width: 12),
@@ -426,7 +420,7 @@ class _DewPointCard extends StatelessWidget {
 
           const Spacer(),
 
-          // Big centered dew point number
+          // giant number
           FittedBox(
             fit: BoxFit.scaleDown,
             child: Text(
@@ -438,17 +432,13 @@ class _DewPointCard extends StatelessWidget {
 
           const SizedBox(height: 16),
 
-          // Live indicator row
+          // live status row
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Container(
-                width: 12,
-                height: 12,
-                decoration: const BoxDecoration(
-                  color: Color(0xFF1F9D55), // ~green dot
-                  shape: BoxShape.circle,
-                ),
+              const CircleAvatar(
+                radius: 6,
+                backgroundColor: Color(0xFF1F9D55), // green dot
               ),
               const SizedBox(width: 8),
               Text('Live', style: _liveStyle),

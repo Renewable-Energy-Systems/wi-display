@@ -1,3 +1,4 @@
+// kiosk_shell.dart
 import 'package:flutter/material.dart';
 import 'web_logs_screen.dart';
 import 'home_screen.dart';
@@ -16,8 +17,7 @@ class _KioskShellState extends State<KioskShell> {
   @override
   void initState() {
     super.initState();
-    // middle page is index 1
-    _controller = PageController(initialPage: 1);
+    _controller = PageController(initialPage: 1); // center = HomeScreen
   }
 
   @override
@@ -25,11 +25,11 @@ class _KioskShellState extends State<KioskShell> {
     return PageView(
       controller: _controller,
       scrollDirection: Axis.horizontal,
-      physics: const PageScrollPhysics(), // allow swipe manually
+      physics: const PageScrollPhysics(),
       children: const [
-        WebLogsScreen(), // LEFT
-        HomeScreen(), // CENTER
-        WIListScreen(), // RIGHT
+        WebLogsScreen(), // swipe LEFT
+        HomeScreen(), // center
+        WIListScreen(), // swipe RIGHT
       ],
     );
   }
