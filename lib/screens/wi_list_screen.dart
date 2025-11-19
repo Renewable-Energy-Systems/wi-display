@@ -10,24 +10,10 @@ class WIListScreen extends StatelessWidget {
   List<WorkInstruction> _demoWI() {
     return const [
       WorkInstruction(
-        id: 'WI-ANODE-PRESS-001',
-        title: 'Anode Pellet Pressing',
-        description:
-            'Die setup, press tonnage, eject handling. Follow dry-box protocol.',
-        videoPath:
-            'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-      ),
-      WorkInstruction(
-        id: 'WI-STACK-ASM-002',
-        title: 'Stack Assembly Procedure',
-        description: 'Electrolyte separator placement and cathode orientation.',
-        videoPath: 'file:///storage/emulated/0/kiosk_videos/stack_asm.mp4',
-      ),
-      WorkInstruction(
-        id: 'WI-GB-ENTRY-003',
-        title: 'Glovebox Entry & Log Sheet',
-        description: 'How to purge, take reading, update log.',
-        videoPath: 'file:///storage/emulated/0/kiosk_videos/glovebox_log.mp4',
+        id: 'WI-PRD-28',
+        title: 'Pellet Manufacturing',
+        description: 'WI-PRD-28',
+        videoPath: 'file:///storage/emulated/0/videos/pellet_manufacturing.mp4',
       ),
     ];
   }
