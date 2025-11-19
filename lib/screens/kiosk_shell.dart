@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'web_logs_screen.dart';
 import 'home_screen.dart';
 import 'wi_list_screen.dart';
+import 'gauge_screen.dart';
 
 class KioskShell extends StatefulWidget {
   const KioskShell({super.key});
@@ -26,11 +27,12 @@ class _KioskShellState extends State<KioskShell> {
       WebLogsScreen(), // index 0 (left)
       HomeScreen(), // index 1 (center)
       WIListScreen(), // index 2 (right)
+      GaugeScreen(), // index 3
     ];
   }
 
   void _goTo(int index) {
-    if (index < 0 || index > 2) return;
+    if (index < 0 || index > 3) return;
     setState(() {
       _pageIndex = index;
     });
@@ -67,7 +69,7 @@ class _KioskShellState extends State<KioskShell> {
             ),
 
           // RIGHT arrow
-          if (_pageIndex < 2)
+          if (_pageIndex < 3)
             Positioned(
               right: 0,
               top: 0,
