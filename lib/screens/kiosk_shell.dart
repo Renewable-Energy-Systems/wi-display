@@ -58,7 +58,7 @@ class _KioskShellState extends State<KioskShell> {
             Positioned(
               left: 0,
               top: 0,
-              bottom: -400,
+              bottom: 0,
               child: _NavButton(
                 alignment: Alignment.centerLeft,
                 icon: Icons.chevron_left_rounded,
