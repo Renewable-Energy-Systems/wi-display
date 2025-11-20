@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/work_instruction.dart';
 import '../widgets/wi_card.dart';
 import 'video_player_screen.dart';
+import 'gauge_screen.dart'; // Import the gauge screen
 
 class WIListScreen extends StatelessWidget {
   const WIListScreen({super.key});

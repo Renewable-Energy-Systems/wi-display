@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 
 class SocketService {
@@ -7,10 +8,13 @@ class SocketService {
 
   IO.Socket? socket;
 
-  Function(Map<String, dynamic>)? onGauge;
+  // Use a broadcast stream so multiple screens can listen if needed
+  final _gaugeController = StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get gaugeStream => _gaugeController.stream;
 
   void connect(String url) {
-    disconnect();
+    // If already connected to the same URL, don't reconnect
+    if (socket != null && socket!.connected) return;
 
     socket = IO.io(
       url,
@@ -25,7 +29,10 @@ class SocketService {
     });
 
     socket!.on("gauge_update", (data) {
-      if (data is Map) onGauge?.call(Map<String, dynamic>.from(data));
+      if (data is Map) {
+        // Add data to the stream
+        _gaugeController.add(Map<String, dynamic>.from(data));
+      }
     });
 
     socket!.onDisconnect((_) => print("[SOCKET] Disconnected"));

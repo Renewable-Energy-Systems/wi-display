@@ -1,3 +1,4 @@
+import 'dart:async'; // Import needed for StreamSubscription
 import 'package:flutter/material.dart';
 import '../socket_service.dart';
 
@@ -11,13 +12,14 @@ class GaugeScreen extends StatefulWidget {
 class _GaugeScreenState extends State<GaugeScreen> {
   String liveValue = "--";
   bool isConnected = false;
+  StreamSubscription? _gaugeSub; // Subscription variable
 
   @override
   void initState() {
     super.initState();
 
-    // 1. Listen for data
-    SocketService().onGauge = (data) {
+    // 1. Listen to the broadcast stream
+    _gaugeSub = SocketService().gaugeStream.listen((data) {
       if (data.containsKey('value')) {
         if (mounted) {
           setState(() {
@@ -26,16 +28,20 @@ class _GaugeScreenState extends State<GaugeScreen> {
           });
         }
       }
-    };
+    });
 
-    // 2. Connect
-    SocketService().connect("http://192.168.0.241:5050");
+    // 2. Ensure connection is active
+    SocketService().connect("http://192.168.0.53:5050");
   }
 
   @override
   void dispose() {
-    // 3. Disconnect when leaving this specific page
-    SocketService().disconnect();
+    // 3. Cancel the subscription when leaving
+    _gaugeSub?.cancel();
+
+    // Optional: Disconnect socket only if you want to stop data flow entirely
+    // SocketService().disconnect();
+
     super.dispose();
   }
 
