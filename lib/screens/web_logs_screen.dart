@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
-import '../socket_service.dart';
+import '../socket_service.dart'; //
 
 class WebLogsScreen extends StatefulWidget {
   const WebLogsScreen({super.key});
@@ -14,14 +14,7 @@ class _WebLogsScreenState extends State<WebLogsScreen>
     with AutomaticKeepAliveClientMixin {
   late final WebViewController _controller;
   bool _isLoading = true;
-
-  // Store the latest value and subscription
-  String _latestGaugeValue = "";
   StreamSubscription? _gaugeSub;
-
-  // Movable FAB Position (Offsets from bottom-right)
-  double _fabBottom = 24.0;
-  double _fabRight = 24.0;
 
   @override
   void initState() {
@@ -30,14 +23,17 @@ class _WebLogsScreenState extends State<WebLogsScreen>
     // 1. Subscribe to the Gauge Stream
     _gaugeSub = SocketService().gaugeStream.listen((data) {
       if (data.containsKey('value')) {
-        setState(() {
-          _latestGaugeValue = data['value'].toString();
-        });
+        final newValue = data['value'].toString();
+
+        // Only inject if the page has finished loading to avoid errors
+        if (!_isLoading) {
+          _injectValueIntoWeb(newValue);
+        }
       }
     });
 
-    // Ensure we are connected
-    SocketService().connect("http://192.168.0.53:5050");
+    // Ensure connection is active
+    SocketService().connect("http://192.168.0.241:5050");
 
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
@@ -53,7 +49,7 @@ class _WebLogsScreenState extends State<WebLogsScreen>
           },
         ),
       )
-      ..loadRequest(Uri.parse('https://logi.weberq.in'));
+      ..loadRequest(Uri.parse('https://logi.weberq.in')); //
   }
 
   @override
@@ -62,41 +58,35 @@ class _WebLogsScreenState extends State<WebLogsScreen>
     super.dispose();
   }
 
-  Future<void> _pasteValueToWeb() async {
-    if (_latestGaugeValue.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("No gauge value received yet")),
-      );
-      return;
-    }
-
-    // JavaScript to inject the value into the active element
+  // Automatically injects the value into the currently focused input field
+  Future<void> _injectValueIntoWeb(String value) async {
     final jsScript =
         '''
       (function() {
         var input = document.activeElement;
-        if (input && (input.tagName === 'INPUT' || input.tagName === 'TEXTAREA')) {
+        // Check if the focused element is a text input or textarea
+        if (input && (input.tagName === 'INPUT' || input.tagName === 'TEXTAREA') && !input.readOnly && !input.disabled) {
+          
+          // Use the prototype setter to bypass React/Angular overrides if present
           var nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
           if (nativeInputValueSetter) {
-             nativeInputValueSetter.call(input, '$_latestGaugeValue');
+             nativeInputValueSetter.call(input, '$value');
           } else {
-             input.value = '$_latestGaugeValue';
+             input.value = '$value';
           }
+          
+          // Dispatch input events so the web app detects the change
           input.dispatchEvent(new Event('input', { bubbles: true }));
           input.dispatchEvent(new Event('change', { bubbles: true }));
         }
       })();
     ''';
 
-    await _controller.runJavaScript(jsScript);
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("Pasted: $_latestGaugeValue"),
-          duration: const Duration(milliseconds: 600),
-        ),
-      );
+    try {
+      await _controller.runJavaScript(jsScript);
+    } catch (e) {
+      // Ignore errors if the webview isn't ready or context is lost
+      debugPrint("Error injecting value: $e");
     }
   }
 
@@ -106,41 +96,16 @@ class _WebLogsScreenState extends State<WebLogsScreen>
 
     return Stack(
       children: [
+        // The Web View
         SafeArea(child: WebViewWidget(controller: _controller)),
 
+        // Loading Indicator
         if (_isLoading)
           Container(
             color: Colors.white,
             alignment: Alignment.center,
             child: const CircularProgressIndicator(),
           ),
-
-        // Movable Floating Paste Button
-        Positioned(
-          bottom: _fabBottom,
-          right: _fabRight,
-          child: GestureDetector(
-            onPanUpdate: (details) {
-              setState(() {
-                // Subtract delta because we are positioning from Bottom/Right
-                // Dragging down (+dy) decreases the 'bottom' offset
-                _fabBottom -= details.delta.dy;
-                _fabRight -= details.delta.dx;
-              });
-            },
-            child: FloatingActionButton.extended(
-              onPressed: _pasteValueToWeb,
-              icon: const Icon(Icons.paste),
-              label: Text(
-                _latestGaugeValue.isEmpty
-                    ? "Wait..."
-                    : "Paste $_latestGaugeValue",
-              ),
-              backgroundColor: const Color(0xFF0A66FF),
-              foregroundColor: Colors.white,
-            ),
-          ),
-        ),
       ],
     );
   }
