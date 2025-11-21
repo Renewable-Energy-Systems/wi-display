@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:web_socket_channel/io.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -32,89 +33,119 @@ class _HomeScreenState extends State<HomeScreen> {
   final String probeId = 'PRB-2024-001';
   final String calibrationDate = '15/01/2024';
   final String calibrationDue = '15/01/2025';
-  final String apiHost = 'http://192.168.0.77:3000';
-  final String colName = 'Det01 (°C)'; // exact column name from /api/columns
 
-  // API: change this to your PC local IP (example: 192.168.0.233)
-  // Note: the column name must be URL-encoded. Example column: Det01 (°C)
-  // encoded becomes: Det01%20(%C2%B0C)
-  // Full example: http://192.168.0.233:3000/api/dewpoint?col=Det01%20(%C2%B0C)
-  String apiUrl = 'http://192.168.0.77:3000/api/dewpoint?col=Det01%20(°C)';
+  // WS config
+  // Use your PC IP here. Example: ws://192.168.0.77:3000
+  final String wsUrl = 'ws://192.168.0.77:3000';
+  final String subscribedColumn = 'Det01 (°C)';
 
   // Live values
   String dewPointDisplay = '-- °C';
   String updatedAt = '––';
-  String status = 'idle';
+  String status = 'disconnected';
 
-  Timer? _pollTimer;
+  WebSocketChannel? _channel;
+  Timer? _reconnectTimer;
 
   @override
   void initState() {
     super.initState();
-    _fetchAndUpdate();
-    // Poll every 60 seconds
-    _pollTimer = Timer.periodic(
-      const Duration(seconds: 60),
-      (_) => _fetchAndUpdate(),
-    );
+    _connectWs();
+  }
+
+  void _connectWs() {
+    // if already connected, do nothing
+    if (_channel != null) return;
+
+    setState(() => status = 'connecting');
+    try {
+      _channel = IOWebSocketChannel.connect(wsUrl);
+
+      _channel!.stream.listen(
+        (message) {
+          // incoming message from server
+          try {
+            final m = json.decode(message);
+            // debug
+            // print('WS msg: $m');
+
+            if (m is Map &&
+                m['type'] == 'update' &&
+                m['col'] == subscribedColumn) {
+              final dew = m['dewpoint_c'];
+              final date = m['date'];
+              final time = m['time'];
+
+              setState(() {
+                dewPointDisplay = (dew == null) ? '-- °C' : '$dew °C';
+                updatedAt = (date == null || time == null)
+                    ? updatedAt
+                    : '$date $time';
+                status = 'connected';
+              });
+            } else if (m is Map && m['type'] == 'welcome') {
+              setState(() => status = 'connected');
+            }
+          } catch (e) {
+            // ignore parse error
+            // print('WS parse error: $e');
+          }
+        },
+        onDone: () {
+          // closed normally
+          _cleanupChannel();
+          _scheduleReconnect();
+        },
+        onError: (err) {
+          // error
+          // print('WS error: $err');
+          _cleanupChannel();
+          _scheduleReconnect();
+        },
+      );
+
+      // subscribe right away
+      final subscribeMsg = json.encode({
+        'action': 'subscribe',
+        'col': subscribedColumn,
+      });
+      _channel!.sink.add(subscribeMsg);
+      setState(() => status = 'subscribed');
+    } catch (e) {
+      // connection failed — schedule reconnect
+      _cleanupChannel();
+      _scheduleReconnect();
+    }
+  }
+
+  void _scheduleReconnect() {
+    // avoid multiple timers
+    _reconnectTimer?.cancel();
+    _reconnectTimer = Timer(const Duration(seconds: 3), () {
+      _reconnectTimer = null;
+      _connectWs();
+    });
+    setState(() => status = 'reconnecting');
+  }
+
+  void _cleanupChannel() {
+    try {
+      _channel?.sink.close();
+    } catch (_) {}
+    _channel = null;
+    setState(() => status = 'disconnected');
   }
 
   @override
   void dispose() {
-    _pollTimer?.cancel();
+    _reconnectTimer?.cancel();
+    try {
+      _channel?.sink.close();
+    } catch (_) {}
     super.dispose();
   }
 
-  Future<void> _fetchAndUpdate() async {
-    setState(() => status = 'loading');
-    try {
-      final uri = Uri.parse(
-        apiHost + '/api/dewpoint',
-      ).replace(queryParameters: {'col': colName});
-      // debug
-      print('Fetching: $uri');
-
-      final resp = await http.get(uri).timeout(const Duration(seconds: 8));
-      print('HTTP ${resp.statusCode} body: ${resp.body}');
-
-      if (resp.statusCode != 200) {
-        setState(() => status = 'error ${resp.statusCode}');
-        return;
-      }
-
-      final j = json.decode(resp.body);
-      print('JSON: $j');
-
-      if (j['found'] == true) {
-        final dp = j['dewpoint_c'];
-        final date = j['date']; // YYYY-MM-DD
-        final time = j['time']; // HH:MM:SS
-
-        final displayDew = (dp == null) ? '-- °C' : '$dp °C';
-        final displayUpdated = (date == null || time == null)
-            ? DateTime.now().toString()
-            : '$date $time';
-
-        setState(() {
-          dewPointDisplay = displayDew;
-          updatedAt = displayUpdated;
-          status = 'ok';
-        });
-      } else {
-        print('API returned no data');
-        setState(() {
-          status = 'no-data';
-          dewPointDisplay = '-- °C';
-        });
-      }
-    } catch (e, st) {
-      print('Fetch error: $e\n$st');
-      setState(() {
-        status = 'err';
-        dewPointDisplay = '-- °C';
-      });
-    }
-  }
+  // (HTTP polling removed — WebSocket pushes updates)
 
   @override
   Widget build(BuildContext context) {
