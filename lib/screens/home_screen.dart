@@ -1,36 +1,124 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
   @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  // Colors (same as your original)
+  static const blueMain = Color(0xFF0A66FF); // header + bottom bar
+  static const bgGradientTop = Color(0xFFF7FAFF); // page bg start
+  static const bgGradientBottom = Color(0xFFF2F6FF); // page bg end
+  static const cardBorder = Color(0xFFE6ECFF);
+  static const panelBorder = Color(0xFFE1E8FF);
+  static const headingText = Color(0xFF1C3366); // "Sensor Information" etc.
+  static const labelText = Color(0xFF5A6B8A); // labels in left card
+  static const valueText = Color(0xFF103B8C); // values in left card
+  static const captionText = Color(0xFF7A8AA6); // "Updated: ..."
+  static const dewBg = Color(0xFFF4F8FF); // right card bg
+  static const dewBorder = Color(0xFFDFE8FF);
+  static const dewLabelText = Color(0xFF1C3FAA); // "Dew Point"
+  static const dewBigNumber = Color(0xFF0A66FF); // 20°C
+  static const liveGreen = Color(0xFF247A3E); // "Live"
+
+  // Left card static details (these can be made dynamic later)
+  final String workstationName = 'WS-001';
+  final String probeId = 'PRB-2024-001';
+  final String calibrationDate = '15/01/2024';
+  final String calibrationDue = '15/01/2025';
+  final String apiHost = 'http://192.168.0.77:3000';
+  final String colName = 'Det01 (°C)'; // exact column name from /api/columns
+
+  // API: change this to your PC local IP (example: 192.168.0.233)
+  // Note: the column name must be URL-encoded. Example column: Det01 (°C)
+  // encoded becomes: Det01%20(%C2%B0C)
+  // Full example: http://192.168.0.233:3000/api/dewpoint?col=Det01%20(%C2%B0C)
+  String apiUrl = 'http://192.168.0.77:3000/api/dewpoint?col=Det01%20(°C)';
+
+  // Live values
+  String dewPointDisplay = '-- °C';
+  String updatedAt = '––';
+  String status = 'idle';
+
+  Timer? _pollTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchAndUpdate();
+    // Poll every 60 seconds
+    _pollTimer = Timer.periodic(
+      const Duration(seconds: 60),
+      (_) => _fetchAndUpdate(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _fetchAndUpdate() async {
+    setState(() => status = 'loading');
+    try {
+      final uri = Uri.parse(
+        apiHost + '/api/dewpoint',
+      ).replace(queryParameters: {'col': colName});
+      // debug
+      print('Fetching: $uri');
+
+      final resp = await http.get(uri).timeout(const Duration(seconds: 8));
+      print('HTTP ${resp.statusCode} body: ${resp.body}');
+
+      if (resp.statusCode != 200) {
+        setState(() => status = 'error ${resp.statusCode}');
+        return;
+      }
+
+      final j = json.decode(resp.body);
+      print('JSON: $j');
+
+      if (j['found'] == true) {
+        final dp = j['dewpoint_c'];
+        final date = j['date']; // YYYY-MM-DD
+        final time = j['time']; // HH:MM:SS
+
+        final displayDew = (dp == null) ? '-- °C' : '$dp °C';
+        final displayUpdated = (date == null || time == null)
+            ? DateTime.now().toString()
+            : '$date $time';
+
+        setState(() {
+          dewPointDisplay = displayDew;
+          updatedAt = displayUpdated;
+          status = 'ok';
+        });
+      } else {
+        print('API returned no data');
+        setState(() {
+          status = 'no-data';
+          dewPointDisplay = '-- °C';
+        });
+      }
+    } catch (e, st) {
+      print('Fetch error: $e\n$st');
+      setState(() {
+        status = 'err';
+        dewPointDisplay = '-- °C';
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // Colors pulled from SVG
-    const blueMain = Color(0xFF0A66FF); // header + bottom bar
-    const bgGradientTop = Color(0xFFF7FAFF); // page bg start
-    const bgGradientBottom = Color(0xFFF2F6FF); // page bg end
-    const cardBorder = Color(0xFFE6ECFF);
-    const panelBorder = Color(0xFFE1E8FF);
-    const headingText = Color(0xFF1C3366); // "Sensor Information" etc.
-    const labelText = Color(0xFF5A6B8A); // labels in left card
-    const valueText = Color(0xFF103B8C); // values in left card
-    const captionText = Color(0xFF7A8AA6); // "Updated: ..."
-    const dewBg = Color(0xFFF4F8FF); // right card bg
-    const dewBorder = Color(0xFFDFE8FF);
-    const dewLabelText = Color(0xFF1C3FAA); // "Dew Point"
-    const dewBigNumber = Color(0xFF0A66FF); // 20°C
-    const liveGreen = Color(0xFF247A3E); // "Live"
-
-    // Hardcoded demo values (later -> API)
-    const workstationName = 'WS-001';
-    const probeId = 'PRB-2024-001';
-    const calibrationDate = '15/01/2024';
-    const calibrationDue = '15/01/2025';
-    const updatedAt = '27/09/2025 11:41';
-    const dewPointDisplay = '20°C';
-
     return Container(
-      // full-screen background gradient like SVG
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
@@ -62,8 +150,6 @@ class HomeScreen extends StatelessWidget {
                   ),
                   child: LayoutBuilder(
                     builder: (context, constraints) {
-                      // Two columns in landscape.
-                      // Stack vertically if tablet is too narrow.
                       final isNarrow = constraints.maxWidth < 780;
 
                       if (isNarrow) {
@@ -98,7 +184,6 @@ class HomeScreen extends StatelessWidget {
                       return Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Left card (~400 wide)
                           Flexible(
                             flex: 4,
                             child: _SensorCard(
@@ -115,7 +200,6 @@ class HomeScreen extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(width: 24),
-                          // Right card (~380 wide)
                           Flexible(
                             flex: 4,
                             child: _DewPointCard(
@@ -152,6 +236,8 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
+// ---------------------- Reused widgets (unchanged) ----------------------
+
 class _TopHeader extends StatelessWidget {
   const _TopHeader({required this.blueMain});
 
@@ -165,9 +251,8 @@ class _TopHeader extends StatelessWidget {
         color: blueMain,
         borderRadius: BorderRadius.circular(16),
         boxShadow: const [
-          // subtle header shadow
           BoxShadow(
-            color: Color(0x1F1B2B65), // #1b2b65 @ ~12%
+            color: Color(0x1F1B2B65),
             offset: Offset(0, 2),
             blurRadius: 4,
           ),
@@ -176,7 +261,6 @@ class _TopHeader extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
-          // left logo block
           Container(
             height: 56,
             width: 56,
@@ -199,10 +283,7 @@ class _TopHeader extends StatelessWidget {
               ),
             ),
           ),
-
           const SizedBox(width: 16),
-
-          // center title
           const Expanded(
             child: Text(
               'Renewable Energy Systems Limited',
@@ -217,8 +298,6 @@ class _TopHeader extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-
-          // right spacer to visually balance the left logo
           const SizedBox(width: 72),
         ],
       ),
@@ -275,7 +354,6 @@ class _SensorCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      // SVG reference: ~400 x 336
       constraints: const BoxConstraints(
         minWidth: 320,
         maxWidth: 480,
@@ -283,7 +361,6 @@ class _SensorCard extends StatelessWidget {
       ),
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        // very light diagonal gradient like the SVG card
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -292,9 +369,8 @@ class _SensorCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: cardBorder, width: 1),
         boxShadow: const [
-          // light elevation
           BoxShadow(
-            color: Color.fromARGB(31, 27, 43, 101), // #1b2b65 @ ~0.12
+            color: Color.fromARGB(31, 27, 43, 101),
             offset: Offset(0, 2),
             blurRadius: 4,
           ),
@@ -305,21 +381,15 @@ class _SensorCard extends StatelessWidget {
         children: [
           Text('Sensor Information', style: _headingStyle),
           const SizedBox(height: 24),
-
           _twoColRow('Workstation name:', workstationName),
           const SizedBox(height: 16),
-
           _twoColRow('Probe ID:', probeId),
           const SizedBox(height: 16),
-
           _twoColRow('Calibration Date:', calibrationDate),
           const SizedBox(height: 16),
-
           _twoColRow('Calibration Due:', calibrationDue),
           const SizedBox(height: 24),
-
           const Spacer(),
-
           Text('Updated: $updatedAt', style: _captionStyle),
         ],
       ),
@@ -330,10 +400,8 @@ class _SensorCard extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // left label
         Expanded(flex: 2, child: Text(label, style: _labelStyle)),
         const SizedBox(width: 12),
-        // right value
         Expanded(flex: 3, child: Text(value, style: _valueStyle)),
       ],
     );
@@ -375,7 +443,6 @@ class _DewPointCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      // SVG reference: ~380 x 336
       constraints: const BoxConstraints(
         minWidth: 300,
         maxWidth: 480,
@@ -387,9 +454,8 @@ class _DewPointCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: dewBorder, width: 1),
         boxShadow: const [
-          // slightly stronger shadow like elevated card in SVG
           BoxShadow(
-            color: Color.fromARGB(41, 27, 43, 101), // #1b2b65 @ ~0.16
+            color: Color.fromARGB(41, 27, 43, 101),
             offset: Offset(0, 8),
             blurRadius: 14,
           ),
@@ -397,7 +463,6 @@ class _DewPointCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          // header row
           Row(
             children: [
               Container(

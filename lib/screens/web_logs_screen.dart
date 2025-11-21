@@ -33,7 +33,7 @@ class _WebLogsScreenState extends State<WebLogsScreen>
     });
 
     // Ensure connection is active
-    SocketService().connect("http://192.168.0.241:5050");
+    SocketService().connect("http://192.168.0.53:5050");
 
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
