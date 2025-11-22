@@ -1,8 +1,11 @@
+// lib/screens/kiosk_shell.dart
 import 'package:flutter/material.dart';
-import 'web_logs_screen.dart';
-import 'home_screen.dart';
-import 'wi_list_screen.dart';
-import 'gauge_screen.dart';
+
+// use prefixes to avoid name collisions and make it explicit
+import 'web_logs_screen.dart' show WebLogsScreen;
+import 'home_screen.dart' as home;
+import 'wi_list_screen.dart' show WIListScreen;
+import 'gauge_screen.dart' as gauge;
 
 class KioskShell extends StatefulWidget {
   const KioskShell({super.key});
@@ -23,16 +26,17 @@ class _KioskShellState extends State<KioskShell> {
     _controller = PageController(initialPage: _pageIndex);
 
     // IMPORTANT: create these widgets ONCE
-    _pages = const [
+    // no const because widget constructors are not const
+    _pages = [
       WebLogsScreen(), // index 0 (left)
-      HomeScreen(), // index 1 (center)
+      home.HomeScreen(), // index 1 (center) — note the prefix
       WIListScreen(), // index 2 (right)
-      GaugeScreen(), // index 3
+      gauge.GaugeScreen(), // index 3 — note the prefix
     ];
   }
 
   void _goTo(int index) {
-    if (index < 0 || index > 3) return;
+    if (index < 0 || index > _pages.length - 1) return;
     setState(() {
       _pageIndex = index;
     });
@@ -41,6 +45,12 @@ class _KioskShellState extends State<KioskShell> {
       duration: const Duration(milliseconds: 250),
       curve: Curves.easeInOut,
     );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
 
   @override
@@ -69,7 +79,7 @@ class _KioskShellState extends State<KioskShell> {
             ),
 
           // RIGHT arrow
-          if (_pageIndex < 3)
+          if (_pageIndex < _pages.length - 1)
             Positioned(
               right: 0,
               top: 0,

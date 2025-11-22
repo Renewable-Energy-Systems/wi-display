@@ -1,8 +1,92 @@
+// lib/screens/home_screen.dart
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+
+// Helper: parse DET -> ParameterNo (keeps compatibility with det_selector)
+int? detToParamNumber(String detName) {
+  final re = RegExp(r'det\s*0*(\d+)', caseSensitive: false);
+  final m = re.firstMatch(detName);
+  if (m == null) return null;
+  return int.tryParse(m.group(1)!);
+}
+
+// Fetch master info from server by parameter number (keeps existing behaviour)
+Future<Map<String, dynamic>?> fetchSensorInfoFromServerByParam(
+  String apiHost,
+  int param,
+) async {
+  try {
+    final uri = Uri.parse(
+      '$apiHost/api/sensorinfo',
+    ).replace(queryParameters: {'param': param.toString()});
+    final resp = await http.get(uri).timeout(const Duration(seconds: 6));
+    if (resp.statusCode != 200) return null;
+    final j = json.decode(resp.body);
+    if (j is Map && j['found'] == true && j['sensor'] is Map) {
+      return Map<String, dynamic>.from(j['sensor']);
+    }
+  } catch (e) {
+    print('fetchSensorInfoFromServerByParam error: $e');
+  }
+  return null;
+}
+
+// Load local override saved on tablet
+Future<Map<String, String>?> loadLocalSensorInfo(int param) async {
+  final prefs = await SharedPreferences.getInstance();
+  final k = 'sensor_local_$param';
+  final s = prefs.getString(k);
+  if (s == null) return null;
+  final j = json.decode(s) as Map<String, dynamic>;
+  return j.map((k, v) => MapEntry(k, v?.toString() ?? ''));
+}
+
+// Utility: get effective info (local override preferred)
+Future<Map<String, String>> getEffectiveSensorInfo(
+  String detName,
+  String apiHost,
+) async {
+  final param = detToParamNumber(detName);
+  if (param == null)
+    return {
+      'workstation': '',
+      'probeId': '',
+      'calibrationDate': '',
+      'calibrationDue': '',
+    };
+
+  final local = await loadLocalSensorInfo(param);
+  if (local != null) return local;
+
+  final master = await fetchSensorInfoFromServerByParam(apiHost, param);
+  if (master != null) {
+    String stripDate(dynamic v) {
+      if (v == null) return '';
+      final s = v.toString();
+      final idx = s.indexOf('T');
+      return idx > 0 ? s.substring(0, idx) : s;
+    }
+
+    return {
+      'workstation': master['ChannelName']?.toString() ?? '',
+      'probeId': master['SenID']?.toString() ?? '',
+      'calibrationDate': stripDate(master['Cali.Date']),
+      'calibrationDue': stripDate(master['Cali.Due']),
+    };
+  }
+
+  return {
+    'workstation': '',
+    'probeId': '',
+    'calibrationDate': '',
+    'calibrationDue': '',
+  };
+}
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -22,130 +106,201 @@ class _HomeScreenState extends State<HomeScreen> {
   static const labelText = Color(0xFF5A6B8A); // labels in left card
   static const valueText = Color(0xFF103B8C); // values in left card
   static const captionText = Color(0xFF7A8AA6); // "Updated: ..."
-  static const dewBg = Color(0xFFF4F8FF); // right card bg
-  static const dewBorder = Color(0xFFDFE8FF);
-  static const dewLabelText = Color(0xFF1C3FAA); // "Dew Point"
-  static const dewBigNumber = Color(0xFF0A66FF); // 20°C
-  static const liveGreen = Color(0xFF247A3E); // "Live"
 
-  // Left card static details (these can be made dynamic later)
-  final String workstationName = 'WS-001';
-  final String probeId = 'PRB-2024-001';
-  final String calibrationDate = '15/01/2024';
-  final String calibrationDue = '15/01/2025';
-
-  // WS config
-  // Use your PC IP here. Example: ws://192.168.0.77:3000
+  // API host & websocket url - change these to match your PC
+  final String apiHost = 'http://192.168.0.77:3000';
   final String wsUrl = 'ws://192.168.0.77:3000';
-  final String subscribedColumn = 'Det01 (°C)';
 
-  // Live values
+  // Sensor info displayed in left card (can be changed locally on tablet)
+  String workstationName = '';
+  String probeId = '';
+  String calibrationDate = '';
+  String calibrationDue = '';
+
+  // Dew point display & last-updated timestamp (moved to dew card)
   String dewPointDisplay = '-- °C';
   String updatedAt = '––';
-  String status = 'disconnected';
+  String status = 'idle';
 
+  // DET column currently selected (from shared prefs)
+  String selectedDetColumn = 'Det01 (°C)';
+
+  // WebSocket channel & subscription tracking
   WebSocketChannel? _channel;
-  Timer? _reconnectTimer;
+  StreamSubscription? _wsSub;
+  String? _subscribedCol; // currently subscribed column on WS
 
   @override
   void initState() {
     super.initState();
-    _connectWs();
+    _initAll();
   }
 
-  void _connectWs() {
-    // if already connected, do nothing
-    if (_channel != null) return;
-
-    setState(() => status = 'connecting');
-    try {
-      _channel = IOWebSocketChannel.connect(wsUrl);
-
-      _channel!.stream.listen(
-        (message) {
-          // incoming message from server
-          try {
-            final m = json.decode(message);
-            // debug
-            // print('WS msg: $m');
-
-            if (m is Map &&
-                m['type'] == 'update' &&
-                m['col'] == subscribedColumn) {
-              final dew = m['dewpoint_c'];
-              final date = m['date'];
-              final time = m['time'];
-
-              setState(() {
-                dewPointDisplay = (dew == null) ? '-- °C' : '$dew °C';
-                updatedAt = (date == null || time == null)
-                    ? updatedAt
-                    : '$date $time';
-                status = 'connected';
-              });
-            } else if (m is Map && m['type'] == 'welcome') {
-              setState(() => status = 'connected');
-            }
-          } catch (e) {
-            // ignore parse error
-            // print('WS parse error: $e');
-          }
-        },
-        onDone: () {
-          // closed normally
-          _cleanupChannel();
-          _scheduleReconnect();
-        },
-        onError: (err) {
-          // error
-          // print('WS error: $err');
-          _cleanupChannel();
-          _scheduleReconnect();
-        },
-      );
-
-      // subscribe right away
-      final subscribeMsg = json.encode({
-        'action': 'subscribe',
-        'col': subscribedColumn,
-      });
-      _channel!.sink.add(subscribeMsg);
-      setState(() => status = 'subscribed');
-    } catch (e) {
-      // connection failed — schedule reconnect
-      _cleanupChannel();
-      _scheduleReconnect();
-    }
-  }
-
-  void _scheduleReconnect() {
-    // avoid multiple timers
-    _reconnectTimer?.cancel();
-    _reconnectTimer = Timer(const Duration(seconds: 3), () {
-      _reconnectTimer = null;
-      _connectWs();
-    });
-    setState(() => status = 'reconnecting');
-  }
-
-  void _cleanupChannel() {
-    try {
-      _channel?.sink.close();
-    } catch (_) {}
-    _channel = null;
-    setState(() => status = 'disconnected');
+  Future<void> _initAll() async {
+    await _loadSelectedDetAndSensorInfo();
+    _connectWebSocket();
   }
 
   @override
   void dispose() {
-    _reconnectTimer?.cancel();
+    _wsSub?.cancel();
     try {
       _channel?.sink.close();
     } catch (_) {}
+    _channel = null;
     super.dispose();
   }
 
-  // (HTTP polling removed — WebSocket pushes updates)
+  Future<void> _loadSelectedDetAndSensorInfo() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedDet = prefs.getString('selected_det_column');
+    if (savedDet != null) selectedDetColumn = savedDet;
+
+    // load effective sensor info
+    final info = await getEffectiveSensorInfo(selectedDetColumn, apiHost);
+    if (mounted) {
+      setState(() {
+        workstationName = info['workstation'] ?? '';
+        probeId = info['probeId'] ?? '';
+        calibrationDate = info['calibrationDate'] ?? '';
+        calibrationDue = info['calibrationDue'] ?? '';
+        // don't change dewpoint on load; updatedAt will be set when WS message arrives
+      });
+    }
+
+    // ensure WS subscription matches selected DET
+    _subscribeToColumn(selectedDetColumn);
+  }
+
+  // (re)connect WebSocket channel used to receive dewpoint updates
+  void _connectWebSocket() {
+    // close previous
+    _wsSub?.cancel();
+    try {
+      _channel?.sink.close();
+    } catch (_) {}
+    _channel = null;
+
+    try {
+      _channel = IOWebSocketChannel.connect(wsUrl);
+      _wsSub = _channel!.stream.listen(
+        (message) {
+          _handleWsMessage(message);
+        },
+        onError: (err) {
+          print('[WS] error: $err');
+          // keep status updated
+          if (mounted) setState(() => status = 'ws-err');
+        },
+        onDone: () {
+          print('[WS] closed');
+          if (mounted) setState(() => status = 'ws-closed');
+          // try reconnect after a short delay
+          Future.delayed(const Duration(seconds: 3), () {
+            if (mounted) _connectWebSocket();
+          });
+        },
+        cancelOnError: true,
+      );
+      if (mounted) setState(() => status = 'ws-connected');
+      // subscribe if we already know selected column
+      if (selectedDetColumn.isNotEmpty) _subscribeToColumn(selectedDetColumn);
+    } catch (e) {
+      print('[WS] connect exception: $e');
+      if (mounted) setState(() => status = 'ws-failed');
+      // schedule retry
+      Future.delayed(const Duration(seconds: 5), () {
+        if (mounted) _connectWebSocket();
+      });
+    }
+  }
+
+  void _handleWsMessage(dynamic raw) {
+    try {
+      final m = json.decode(raw.toString());
+      if (m is Map && m['type'] == 'update') {
+        final col = m['col']?.toString();
+        // Only accept updates for currently selected column (robust)
+        if (col != null && col == selectedDetColumn) {
+          final dew = m['dewpoint_c'];
+          final date = m['date'] ?? '';
+          final time = m['time'] ?? '';
+          String dewStr;
+          if (dew == null ||
+              dew.toString().toLowerCase() == 'null' ||
+              dew.toString().trim() == '') {
+            dewStr = '-- °C';
+          } else {
+            // dew may already be a string with 2 decimals; ensure formatted
+            dewStr = '${dew.toString()} °C';
+          }
+          final updated = (date != '' || time != '')
+              ? '$date $time'
+              : DateTime.now().toString();
+
+          if (mounted) {
+            setState(() {
+              dewPointDisplay = dewStr;
+              updatedAt = updated;
+              status = 'ok';
+            });
+          }
+        }
+      } else if (m is Map && m['type'] == 'columns') {
+        // ignore for now
+      } else if (m is Map && m['type'] == 'subscribed') {
+        print('[WS] subscribed: ${m['col']}');
+      }
+    } catch (e) {
+      print('[WS] message parse error: $e -- raw: $raw');
+    }
+  }
+
+  // subscribe/unsubscribe helpers (sends JSON action messages to WS)
+  void _subscribeToColumn(String col) {
+    // if channel not ready, we'll attempt again after small delay (connect may be async)
+    if (_channel == null) {
+      Future.delayed(const Duration(milliseconds: 300), () {
+        if (mounted) _subscribeToColumn(col);
+      });
+      return;
+    }
+
+    try {
+      // if previously subscribed to a different column, unsubscribe it first
+      if (_subscribedCol != null && _subscribedCol != col) {
+        final msg = json.encode({
+          'action': 'unsubscribe',
+          'col': _subscribedCol,
+        });
+        _channel!.sink.add(msg);
+      }
+
+      // send subscribe for the requested column
+      final subMsg = json.encode({'action': 'subscribe', 'col': col});
+      _channel!.sink.add(subMsg);
+      _subscribedCol = col;
+      print('[WS] subscribe sent for $col');
+    } catch (e) {
+      print('[WS] subscribe error: $e');
+    }
+  }
+
+  // manual refresh (if you call it)
+  Future<void> refreshSensorInfo() async {
+    final info = await getEffectiveSensorInfo(selectedDetColumn, apiHost);
+    if (mounted) {
+      setState(() {
+        workstationName = info['workstation'] ?? '';
+        probeId = info['probeId'] ?? '';
+        calibrationDate = info['calibrationDate'] ?? '';
+        calibrationDue = info['calibrationDue'] ?? '';
+        updatedAt = DateTime.now().toString();
+      });
+    }
+    // re-subscribe to ensure WS streaming
+    _subscribeToColumn(selectedDetColumn);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -197,15 +352,14 @@ class _HomeScreenState extends State<HomeScreen> {
                               probeId: probeId,
                               calibrationDate: calibrationDate,
                               calibrationDue: calibrationDue,
-                              updatedAt: updatedAt,
                             ),
                             const SizedBox(height: 24),
                             _DewPointCard(
-                              dewBg: dewBg,
-                              dewBorder: dewBorder,
-                              dewLabelText: dewLabelText,
-                              dewBigNumber: dewBigNumber,
-                              liveGreen: liveGreen,
+                              dewBg: const Color(0xFFF4F8FF),
+                              dewBorder: const Color(0xFFDFE8FF),
+                              dewLabelText: const Color(0xFF1C3FAA),
+                              dewBigNumber: const Color(0xFF0A66FF),
+                              updatedAt: updatedAt,
                               dewPointDisplay: dewPointDisplay,
                             ),
                           ],
@@ -227,18 +381,17 @@ class _HomeScreenState extends State<HomeScreen> {
                               probeId: probeId,
                               calibrationDate: calibrationDate,
                               calibrationDue: calibrationDue,
-                              updatedAt: updatedAt,
                             ),
                           ),
                           const SizedBox(width: 24),
                           Flexible(
                             flex: 4,
                             child: _DewPointCard(
-                              dewBg: dewBg,
-                              dewBorder: dewBorder,
-                              dewLabelText: dewLabelText,
-                              dewBigNumber: dewBigNumber,
-                              liveGreen: liveGreen,
+                              dewBg: const Color(0xFFF4F8FF),
+                              dewBorder: const Color(0xFFDFE8FF),
+                              dewLabelText: const Color(0xFF1C3FAA),
+                              dewBigNumber: const Color(0xFF0A66FF),
+                              updatedAt: updatedAt,
                               dewPointDisplay: dewPointDisplay,
                             ),
                           ),
@@ -267,7 +420,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// ---------------------- Reused widgets (unchanged) ----------------------
+// ---------------------- Reused widgets (unchanged except where requested) ----------------------
 
 class _TopHeader extends StatelessWidget {
   const _TopHeader({required this.blueMain});
@@ -347,7 +500,6 @@ class _SensorCard extends StatelessWidget {
     required this.probeId,
     required this.calibrationDate,
     required this.calibrationDue,
-    required this.updatedAt,
   });
 
   final Color headingText;
@@ -360,7 +512,6 @@ class _SensorCard extends StatelessWidget {
   final String probeId;
   final String calibrationDate;
   final String calibrationDue;
-  final String updatedAt;
 
   TextStyle get _headingStyle =>
       TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: headingText);
@@ -378,9 +529,6 @@ class _SensorCard extends StatelessWidget {
     height: 1.3,
     color: valueText,
   );
-
-  TextStyle get _captionStyle =>
-      TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: captionText);
 
   @override
   Widget build(BuildContext context) {
@@ -421,7 +569,7 @@ class _SensorCard extends StatelessWidget {
           _twoColRow('Calibration Due:', calibrationDue),
           const SizedBox(height: 24),
           const Spacer(),
-          Text('Updated: $updatedAt', style: _captionStyle),
+          // NOTE: Removed Updated: from this card (user requested)
         ],
       ),
     );
@@ -445,17 +593,17 @@ class _DewPointCard extends StatelessWidget {
     required this.dewBorder,
     required this.dewLabelText,
     required this.dewBigNumber,
-    required this.liveGreen,
     required this.dewPointDisplay,
+    required this.updatedAt,
   });
 
   final Color dewBg;
   final Color dewBorder;
   final Color dewLabelText;
   final Color dewBigNumber;
-  final Color liveGreen;
 
   final String dewPointDisplay;
+  final String updatedAt;
 
   TextStyle get _headingStyle =>
       TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: dewLabelText);
@@ -468,8 +616,11 @@ class _DewPointCard extends StatelessWidget {
     letterSpacing: -2,
   );
 
-  TextStyle get _liveStyle =>
-      TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: liveGreen);
+  TextStyle get _updatedStyle => const TextStyle(
+    fontSize: 14,
+    fontWeight: FontWeight.w500,
+    color: Color(0xFF7A8AA6),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -494,6 +645,7 @@ class _DewPointCard extends StatelessWidget {
       ),
       child: Column(
         children: [
+          // Header row
           Row(
             children: [
               Container(
@@ -514,31 +666,26 @@ class _DewPointCard extends StatelessWidget {
             ],
           ),
 
-          const Spacer(),
-
-          // giant number
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              dewPointDisplay,
-              style: _bigNumberStyle,
-              textAlign: TextAlign.center,
+          // center the large number vertically + horizontally
+          Expanded(
+            child: Center(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  dewPointDisplay,
+                  style: _bigNumberStyle,
+                  textAlign: TextAlign.center,
+                ),
+              ),
             ),
           ),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
 
-          // live status row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const CircleAvatar(
-                radius: 6,
-                backgroundColor: Color(0xFF1F9D55), // green dot
-              ),
-              const SizedBox(width: 8),
-              Text('Live', style: _liveStyle),
-            ],
+          // moved "Updated: ..." here (left aligned at bottom)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text('Updated: $updatedAt', style: _updatedStyle),
           ),
         ],
       ),
