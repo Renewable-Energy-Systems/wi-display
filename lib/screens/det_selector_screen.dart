@@ -210,10 +210,7 @@ class _DetSelectorScreenState extends State<DetSelectorScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Select DET & Sensor Info'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
+        automaticallyImplyLeading: false, // hide default back button too if they rely on keys, or just remove explicit leading
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),

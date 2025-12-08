@@ -122,29 +122,34 @@ class _GaugeScreenState extends State<GaugeScreen> with AutomaticKeepAliveClient
         elevation: 1,
         iconTheme: const IconThemeData(color: Colors.black),
         actions: [
-           IconButton(
-            icon: const Icon(Icons.settings, color: Colors.blueGrey),
-            tooltip: 'Configuration',
-            onPressed: () async {
-              await Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const SettingsScreen()),
-              );
-              // Refresh config on return
-              _loadConfig();
-              _connectSocket();
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.arrow_forward, color: Colors.black),
-            tooltip: 'Select DET',
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) =>
-                      DetSelectorScreen(apiHost: apiHost, channel: _detChannel),
+          Padding(
+            padding: const EdgeInsets.only(right: 16.0),
+            child: InkWell(
+              onTap: () async {
+                await Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                );
+                _loadConfig();
+                _connectSocket();
+              },
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                  border: Border.all(color: Colors.grey.withOpacity(0.1)),
                 ),
-              );
-            },
+                child: const Icon(Icons.settings, color: Colors.blueGrey, size: 24),
+              ),
+            ),
           ),
         ],
       ),
