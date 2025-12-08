@@ -452,24 +452,16 @@ class _TopHeader extends StatelessWidget {
         children: [
           Container(
             height: 56,
-            width: 56,
+            width: 80,
+            padding: const EdgeInsets.all(8.0),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.15),
+              color: Colors.white,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: Colors.white.withOpacity(0.3),
-                width: 1,
-              ),
             ),
             alignment: Alignment.center,
-            child: const Text(
-              'RES',
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: 16,
-                color: Colors.white,
-                letterSpacing: -0.2,
-              ),
+            child: Image.asset(
+              'assets/res_logo.png',
+              fit: BoxFit.contain,
             ),
           ),
           const SizedBox(width: 16),
