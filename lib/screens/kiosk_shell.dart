@@ -81,27 +81,27 @@ class _KioskShellState extends State<KioskShell> {
 
           // LEFT arrow
           if (_pageIndex > 0)
-            Positioned(
-              left: 0,
-              top: 0,
-              bottom: 0,
-              child: _NavButton(
-                alignment: Alignment.centerLeft,
-                icon: Icons.chevron_left_rounded,
-                onTap: () => _goTo(_pageIndex - 1),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Padding(
+                padding: const EdgeInsets.only(left: 16),
+                child: _NavButton(
+                  icon: Icons.chevron_left_rounded,
+                  onTap: () => _goTo(_pageIndex - 1),
+                ),
               ),
             ),
 
           // RIGHT arrow
           if (_pageIndex < _pages.length - 1)
-            Positioned(
-              right: 0,
-              top: 0,
-              bottom: 0,
-              child: _NavButton(
-                alignment: Alignment.centerRight,
-                icon: Icons.chevron_right_rounded,
-                onTap: () => _goTo(_pageIndex + 1),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 16),
+                child: _NavButton(
+                  icon: Icons.chevron_right_rounded,
+                  onTap: () => _goTo(_pageIndex + 1),
+                ),
               ),
             ),
         ],
@@ -111,37 +111,38 @@ class _KioskShellState extends State<KioskShell> {
 }
 
 class _NavButton extends StatelessWidget {
-  final Alignment alignment;
   final IconData icon;
   final VoidCallback onTap;
 
   const _NavButton({
     super.key,
-    required this.alignment,
     required this.icon,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Container(
-        width: 80,
-        alignment: alignment,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: alignment == Alignment.centerLeft
-                ? Alignment.centerLeft
-                : Alignment.centerRight,
-            end: alignment == Alignment.centerLeft
-                ? Alignment.centerRight
-                : Alignment.centerLeft,
-            colors: [Colors.black.withOpacity(0.08), Colors.transparent],
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(30),
+        child: Container(
+          width: 60,
+          height: 60,
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.8),
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 8,
+                spreadRadius: 2,
+              ),
+            ],
           ),
+          child: Icon(icon, size: 36, color: Colors.blueGrey[800]),
         ),
-        child: Icon(icon, size: 48, color: Colors.black.withOpacity(0.4)),
       ),
     );
   }
