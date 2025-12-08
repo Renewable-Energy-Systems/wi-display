@@ -6,6 +6,7 @@ import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../config/api_constants.dart';
 
 // Helper: parse DET -> ParameterNo (keeps compatibility with det_selector)
 int? detToParamNumber(String detName) {
@@ -95,7 +96,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMixin {
   // Colors (same as your original)
   static const blueMain = Color(0xFF0A66FF); // header + bottom bar
   static const bgGradientTop = Color(0xFFF7FAFF); // page bg start
@@ -107,9 +108,9 @@ class _HomeScreenState extends State<HomeScreen> {
   static const valueText = Color(0xFF103B8C); // values in left card
   static const captionText = Color(0xFF7A8AA6); // "Updated: ..."
 
-  // API host & websocket url - change these to match your PC
-  final String apiHost = 'http://192.168.0.9:3000';
-  final String wsUrl = 'ws://192.168.0.9:3000';
+  // API host & websocket url
+  final String apiHost = ApiConstants.detApiHost;
+  final String wsUrl = ApiConstants.detWsUrl;
 
   // Sensor info displayed in left card (can be changed locally on tablet)
   String workstationName = '';
@@ -303,7 +304,11 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   @override
+  bool get wantKeepAlive => true;
+
+  @override
   Widget build(BuildContext context) {
+    super.build(context);
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
