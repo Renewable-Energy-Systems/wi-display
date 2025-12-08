@@ -108,8 +108,8 @@ class _HomeScreenState extends State<HomeScreen> {
   static const captionText = Color(0xFF7A8AA6); // "Updated: ..."
 
   // API host & websocket url - change these to match your PC
-  final String apiHost = 'http://192.168.0.77:3000';
-  final String wsUrl = 'ws://192.168.0.77:3000';
+  final String apiHost = 'http://192.168.0.9:3000';
+  final String wsUrl = 'ws://192.168.0.9:3000';
 
   // Sensor info displayed in left card (can be changed locally on tablet)
   String workstationName = '';

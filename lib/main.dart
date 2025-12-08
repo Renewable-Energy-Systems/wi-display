@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'screens/kiosk_shell.dart';
+import 'package:web_socket_channel/io.dart';
+import 'config/api_constants.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -43,7 +45,10 @@ class RESKioskApp extends StatelessWidget {
       title: 'RES Production Kiosk',
       debugShowCheckedModeBanner: false,
       theme: theme,
-      home: const KioskShell(),
+      home: KioskShell(
+        apiHost: ApiConstants.detApiHost,
+        channel: IOWebSocketChannel.connect(ApiConstants.detWsUrl),
+      ),
     );
   }
 }

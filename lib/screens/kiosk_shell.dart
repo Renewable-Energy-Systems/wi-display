@@ -1,18 +1,28 @@
 // lib/screens/kiosk_shell.dart
 import 'package:flutter/material.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
 
 // use prefixes to avoid name collisions and make it explicit
 import 'web_logs_screen.dart' show WebLogsScreen;
 import 'home_screen.dart' as home;
 import 'wi_list_screen.dart' show WIListScreen;
 import 'gauge_screen.dart' as gauge;
+import 'det_selector_screen.dart' show DetSelectorScreen;
 
 class KioskShell extends StatefulWidget {
-  const KioskShell({super.key});
+  final WebSocketChannel? channel;
+  final String apiHost;
+
+  const KioskShell({
+    super.key,
+    required this.apiHost,
+    this.channel,
+  });
 
   @override
   State<KioskShell> createState() => _KioskShellState();
 }
+
 
 class _KioskShellState extends State<KioskShell> {
   late final PageController _controller;
@@ -32,6 +42,10 @@ class _KioskShellState extends State<KioskShell> {
       home.HomeScreen(), // index 1 (center) — note the prefix
       WIListScreen(), // index 2 (right)
       gauge.GaugeScreen(), // index 3 — note the prefix
+      DetSelectorScreen(         // index 4
+        apiHost: widget.apiHost,
+        channel: widget.channel,
+      ),
     ];
   }
 

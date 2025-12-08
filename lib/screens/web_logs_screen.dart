@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
-import '../socket_service.dart'; //
+import '../socket_service.dart'; 
+import '../services/config_service.dart';
 
 class WebLogsScreen extends StatefulWidget {
   const WebLogsScreen({super.key});
@@ -33,7 +34,7 @@ class _WebLogsScreenState extends State<WebLogsScreen>
     });
 
     // Ensure connection is active
-    SocketService().connect("http://192.168.0.53:5050");
+    _connectSocket();
 
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
@@ -112,4 +113,9 @@ class _WebLogsScreenState extends State<WebLogsScreen>
 
   @override
   bool get wantKeepAlive => true;
+
+  Future<void> _connectSocket() async {
+     final url = await ConfigService().getBaseUrl();
+     SocketService().connect(url);
+  }
 }
