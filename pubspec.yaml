@@ -44,6 +44,13 @@ dependencies:
   video_player: ^2.9.2       # underlying player
   wakelock_plus: ^1.2.5      
   permission_handler: ^11.3.1
+  ota_update: ^7.1.0
+  package_info_plus: ^9.0.0
+  # Secure OTA dependencies
+  dio: ^5.4.0
+  crypto: ^3.0.3
+  path_provider: ^2.1.2
+  open_filex: ^4.3.2
 
 dev_dependencies:
   flutter_test:

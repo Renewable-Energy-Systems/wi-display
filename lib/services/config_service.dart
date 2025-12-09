@@ -25,4 +25,16 @@ class ConfigService {
     final type = await getSavedMachineType();
     return machineUrls[type] ?? machineUrls['EPM']!;
   }
+
+  static const String _keyUpdateUrl = 'update_server_url';
+
+  Future<String?> getUpdateServerUrl() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_keyUpdateUrl);
+  }
+
+  Future<void> saveUpdateServerUrl(String url) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyUpdateUrl, url);
+  }
 }
