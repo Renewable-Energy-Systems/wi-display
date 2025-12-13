@@ -50,8 +50,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _showUpdateDialog() async {
-    final savedUrl = await _configService.getUpdateServerUrl();
-    final TextEditingController urlCtrl = TextEditingController(text: savedUrl ?? 'http://192.168.0.200:8000');
+    final savedToken = await _configService.getGitHubToken();
+    final TextEditingController tokenCtrl = TextEditingController(text: savedToken ?? '');
     
     // ignore: use_build_context_synchronously
     await showDialog(
@@ -69,12 +69,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                     const Text('Enter the URL of the PC hosting the update:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                     const Text('Updates are fetched from GitHub.', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                     const SizedBox(height: 5),
+                     const Text('If the repo is Private, enter your Personal Access Token (PAT).', style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic)),
                     TextField(
-                      controller: urlCtrl,
+                      controller: tokenCtrl,
+                      obscureText: true,
                       decoration: const InputDecoration(
-                        labelText: 'Update Server URL',
-                        hintText: 'http://192.168.0.x:8000',
+                        labelText: 'GitHub Token',
+                        hintText: 'ghp_xxxxxxxxxxxx',
+                        helperText: 'Leave empty for Public repos',
                       ),
                     ),
                     const SizedBox(height: 10),
@@ -90,7 +94,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       Text('Current: ${updateInfo!['currentVersion']}'),
                       const SizedBox(height: 5),
                       const Text('Release Notes:', style: TextStyle(fontWeight: FontWeight.bold)),
-                      Text(updateInfo!['releaseNotes'] ?? ''),
+                      Container(
+                        constraints: const BoxConstraints(maxHeight: 100),
+                        child: SingleChildScrollView(
+                          child: Text(updateInfo!['releaseNotes'] ?? ''),
+                        ),
+                      ),
                     ]
                   ],
                 ),
@@ -101,26 +110,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     onPressed: checking ? null : () async {
                       setState(() {
                          checking = true;
-                         status = 'Checking...';
+                         status = 'Checking GitHub...';
                       });
                       
-                      final url = urlCtrl.text.trim();
-                      await _configService.saveUpdateServerUrl(url); // Save for next time
+                      final token = tokenCtrl.text.trim();
+                      await _configService.saveGitHubToken(token); // Save for next time
                       
-                      final info = await _updateService.checkForUpdate(url);
+                      final info = await _updateService.checkForUpdate(token: token);
                       // ignore: use_build_context_synchronously
                       if (context.mounted) {
                         setState(() {
                           checking = false;
-                          if (info != null && info.containsKey('error')) {
-                             status = 'Error: ${info['error']}';
-                          } else if (info != null && info['updateAvailable'] == true) {
+                          if (info != null && info['updateAvailable'] == true) {
                              status = 'Update found!';
                              updateInfo = info;
                           } else {
-                             status = 'No updates available';
-                             if (info != null && info.containsKey('currentVersion')) {
-                               status += ' (Current: ${info['currentVersion']})';
+                             if (info != null && info.containsKey('error')) {
+                               status = 'Error: ${info['error']}';
+                             } else {
+                               status = 'No updates available';
+                               if (info != null && info.containsKey('currentVersion')) {
+                                 status += ' (Current: ${info['currentVersion']})';
+                               }
                              }
                           }
                         });
@@ -132,7 +143,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   TextButton(
                     onPressed: () {
                       Navigator.of(context).pop();
-                      _performUpdate(updateInfo!['apkUrl'], updateInfo!['hash']);
+                      _performUpdate(
+                         updateInfo!['downloadUrl'], 
+                         token: tokenCtrl.text.trim(),
+                         isPrivate: updateInfo!['isPrivate'] ?? false
+                      );
                     },
                     child: const Text('Install Update'),
                   ),
@@ -148,15 +163,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Future<void> _performUpdate(String apkUrl, String? hash) async {
+  Future<void> _performUpdate(String apkUrl, {String? token, bool isPrivate = false}) async {
     setState(() {
       _isCheckingUpdate = true;
-      _updateStatus = 'Downloading...';
+      _updateStatus = 'Downloading from GitHub...';
     });
 
     try {
       // ignore: cancel_subscriptions
-      _updateService.runUpdate(apkUrl, expectedHash: hash).listen(
+      _updateService.runUpdate(apkUrl, token: token, isPrivate: isPrivate).listen(
         (OtaEvent event) {
           if (mounted) {
             setState(() {

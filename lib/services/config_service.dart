@@ -26,15 +26,15 @@ class ConfigService {
     return machineUrls[type] ?? machineUrls['EPM']!;
   }
 
-  static const String _keyUpdateUrl = 'update_server_url';
+  static const String _keyGitHubToken = 'github_token';
 
-  Future<String?> getUpdateServerUrl() async {
+  Future<String?> getGitHubToken() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_keyUpdateUrl);
+    return prefs.getString(_keyGitHubToken);
   }
 
-  Future<void> saveUpdateServerUrl(String url) async {
+  Future<void> saveGitHubToken(String token) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_keyUpdateUrl, url);
+    await prefs.setString(_keyGitHubToken, token);
   }
 }
