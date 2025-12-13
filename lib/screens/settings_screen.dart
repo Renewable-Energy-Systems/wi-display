@@ -3,6 +3,8 @@ import '../services/config_service.dart';
 import '../services/update_service.dart';
 import 'package:ota_update/ota_update.dart';
 
+import 'package:package_info_plus/package_info_plus.dart';
+
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
 
@@ -17,6 +19,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _isLoading = true;
   bool _isCheckingUpdate = false;
   String _updateStatus = '';
+  String _appVersion = '';
 
   @override
   void initState() {
@@ -26,9 +29,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _loadSettings() async {
     final machine = await _configService.getSavedMachineType();
+    final packageInfo = await PackageInfo.fromPlatform();
+    
     if (mounted) {
       setState(() {
         _selectedMachine = machine;
+        _appVersion = packageInfo.version;
         _isLoading = false;
       });
     }
@@ -49,160 +55,105 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _showUpdateDialog() async {
-    final savedToken = await _configService.getGitHubToken();
-    final TextEditingController tokenCtrl = TextEditingController(text: savedToken ?? '');
-    
-    // ignore: use_build_context_synchronously
-    await showDialog(
-      context: context,
-      builder: (context) {
-        bool checking = false;
-        String status = '';
-        Map<String, dynamic>? updateInfo;
+  Future<void> _handleCheckForUpdates() async {
+    setState(() {
+      _isCheckingUpdate = true;
+      _updateStatus = 'Checking GitHub...';
+    });
 
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              title: const Text('Check for Updates'),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                     const Text('Updates are fetched from GitHub.', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                     const SizedBox(height: 5),
-                     const Text('If the repo is Private, enter your Personal Access Token (PAT).', style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic)),
-                    TextField(
-                      controller: tokenCtrl,
-                      obscureText: true,
-                      decoration: const InputDecoration(
-                        labelText: 'GitHub Token',
-                        hintText: 'ghp_xxxxxxxxxxxx',
-                        helperText: 'Leave empty for Public repos',
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    if (checking) const LinearProgressIndicator(),
-                    if (status.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8.0),
-                        child: Text(status),
-                      ),
-                    if (updateInfo != null) ...[
-                      const SizedBox(height: 10),
-                      Text('New Version: ${updateInfo!['latestVersion']}'),
-                      Text('Current: ${updateInfo!['currentVersion']}'),
-                      const SizedBox(height: 5),
-                      const Text('Release Notes:', style: TextStyle(fontWeight: FontWeight.bold)),
-                      Container(
-                        constraints: const BoxConstraints(maxHeight: 100),
-                        child: SingleChildScrollView(
-                          child: Text(updateInfo!['releaseNotes'] ?? ''),
-                        ),
-                      ),
-                    ]
-                  ],
-                ),
+    final info = await _updateService.checkForUpdate();
+
+    if (!mounted) return;
+
+    setState(() {
+      _isCheckingUpdate = false;
+      _updateStatus = '';
+    });
+
+    if (info != null && info['updateAvailable'] == true) {
+      _showUpdateAvailableDialog(info);
+    } else if (info != null && info.containsKey('error')) {
+      _showErrorDialog(info['error']);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('App is up to date!')),
+      );
+    }
+  }
+
+  void _showUpdateAvailableDialog(Map<String, dynamic> info) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('New Update Available'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Version ${info['latestVersion']} is available.'),
+            const SizedBox(height: 8),
+            const Text('Release Notes:', style: TextStyle(fontWeight: FontWeight.bold)),
+            Container(
+              constraints: const BoxConstraints(maxHeight: 150),
+              child: SingleChildScrollView(
+                child: Text(info['releaseNotes'] ?? ''),
               ),
-              actions: [
-                if (updateInfo == null)
-                  TextButton(
-                    onPressed: checking ? null : () async {
-                      setState(() {
-                         checking = true;
-                         status = 'Checking GitHub...';
-                      });
-                      
-                      final token = tokenCtrl.text.trim();
-                      await _configService.saveGitHubToken(token); // Save for next time
-                      
-                      final info = await _updateService.checkForUpdate(token: token);
-                      // ignore: use_build_context_synchronously
-                      if (context.mounted) {
-                        setState(() {
-                          checking = false;
-                          if (info != null && info['updateAvailable'] == true) {
-                             status = 'Update found!';
-                             updateInfo = info;
-                          } else {
-                             if (info != null && info.containsKey('error')) {
-                               status = 'Error: ${info['error']}';
-                             } else {
-                               status = 'No updates available';
-                               if (info != null && info.containsKey('currentVersion')) {
-                                 status += ' (Current: ${info['currentVersion']})';
-                               }
-                             }
-                          }
-                        });
-                      }
-                    },
-                    child: const Text('Check'),
-                  ),
-                if (updateInfo != null)
-                  TextButton(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                      _performUpdate(
-                         updateInfo!['downloadUrl'], 
-                         token: tokenCtrl.text.trim(),
-                         isPrivate: updateInfo!['isPrivate'] ?? false
-                      );
-                    },
-                    child: const Text('Install Update'),
-                  ),
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Close'),
-                ),
-              ],
-            );
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _performUpdate(info['downloadUrl']);
+            },
+            child: const Text('Update'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showErrorDialog(String error) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Update Check Failed'),
+        content: Text(error),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _performUpdate(String apkUrl) async {
+    setState(() {
+      _isCheckingUpdate = true;
+      _updateStatus = 'Starting download...';
+    });
+
+    // Show progress dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return _UpdateProgressDialog(
+          stream: _updateService.runUpdate(apkUrl),
+          onDone: () {
+             Navigator.pop(ctx); // Close dialog
+             setState(() { _isCheckingUpdate = false; _updateStatus = ''; });
           },
         );
       },
     );
-  }
-
-  Future<void> _performUpdate(String apkUrl, {String? token, bool isPrivate = false}) async {
-    setState(() {
-      _isCheckingUpdate = true;
-      _updateStatus = 'Downloading from GitHub...';
-    });
-
-    try {
-      // ignore: cancel_subscriptions
-      _updateService.runUpdate(apkUrl, token: token, isPrivate: isPrivate).listen(
-        (OtaEvent event) {
-          if (mounted) {
-            setState(() {
-              _updateStatus = 'Status: ${event.status} ${event.value ?? ""}%';
-            });
-          }
-        },
-        onError: (error) {
-           if (mounted) {
-            setState(() {
-              _updateStatus = 'Update Error: $error';
-              _isCheckingUpdate = false;
-            });
-           }
-        },
-        onDone: () {
-           if (mounted) {
-             setState(() {
-               _isCheckingUpdate = false; 
-             });
-           }
-        }
-      );
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _updateStatus = 'Error starting update: $e';
-          _isCheckingUpdate = false;
-        });
-      }
-    }
   }
 
   @override
@@ -238,29 +189,100 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
+                
+                // Update Section
                 Card(
                   child: Padding(
                     padding: const EdgeInsets.all(16.0),
                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (_updateStatus.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: Text(_updateStatus, style: const TextStyle(fontWeight: FontWeight.bold)),
-                          ),
-                         ElevatedButton.icon(
-                          onPressed: _isCheckingUpdate ? null : () => _showUpdateDialog(), // implementing dialog below
-                          icon: _isCheckingUpdate 
-                              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) 
-                              : const Icon(Icons.system_update),
-                          label: const Text('Check for Updates'),
+                        const Text(
+                          'App Updates',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                         ),
+                        const SizedBox(height: 8),
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('Current Version'),
+                          subtitle: Text(_appVersion.isNotEmpty ? _appVersion : 'Unknown'),
+                          trailing: _isCheckingUpdate
+                              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                              : ElevatedButton(
+                                  onPressed: _handleCheckForUpdates,
+                                  child: const Text('Check for Updates'),
+                                ),
+                        ),
+                        if (_updateStatus.isNotEmpty && !_isCheckingUpdate) // Only show status text if not checking (e.g. error msg)
+                           Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Text(_updateStatus, style: const TextStyle(color: Colors.red)),
+                          ),
                       ],
                     ),
                   ),
                 ),
               ],
             ),
+    );
+  }
+}
+
+class _UpdateProgressDialog extends StatelessWidget {
+  final Stream<OtaEvent> stream;
+  final VoidCallback onDone;
+
+  const _UpdateProgressDialog({super.key, required this.stream, required this.onDone});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<OtaEvent>(
+      stream: stream,
+      builder: (context, snapshot) {
+        String status = "Starting download...";
+        double? progress;
+
+        if (snapshot.hasError) {
+          status = "Error: ${snapshot.error}";
+        } else if (snapshot.hasData) {
+          final event = snapshot.data!;
+          status = "${event.status} ${event.value ?? ''}";
+          if (event.status == OtaStatus.DOWNLOADING) {
+             progress = (int.tryParse(event.value ?? '0') ?? 0) / 100.0;
+          }
+          if (event.status == OtaStatus.INSTALLING) {
+             progress = null; // indeterminate
+             status = "Installing...";
+          }
+        }
+        
+        // Allow closing if stream is done or error occurred
+        bool isDone = snapshot.connectionState == ConnectionState.done || snapshot.hasError;
+        if (snapshot.hasData && snapshot.data!.status.toString().contains('ERROR')) {
+           isDone = true;
+        }
+
+        return PopScope(
+          canPop: false,
+          child: AlertDialog(
+            title: const Text('Updating App'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(status),
+                const SizedBox(height: 10),
+                // Hide progress bar if done
+                if (!isDone)
+                  LinearProgressIndicator(value: progress),
+              ],
+            ),
+            actions: [
+               if (isDone)
+                 TextButton(onPressed: onDone, child: const Text('Close'))
+            ],
+          ),
+        );
+      },
     );
   }
 }

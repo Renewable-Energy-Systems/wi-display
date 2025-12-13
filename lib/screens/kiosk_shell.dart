@@ -9,6 +9,9 @@ import 'wi_list_screen.dart' show WIListScreen;
 import 'gauge_screen.dart' as gauge;
 import 'det_selector_screen.dart' show DetSelectorScreen;
 
+import 'package:ota_update/ota_update.dart';
+import '../services/update_service.dart';
+
 class KioskShell extends StatefulWidget {
   final WebSocketChannel? channel;
   final String apiHost;
@@ -28,10 +31,12 @@ class _KioskShellState extends State<KioskShell> {
   late final PageController _controller;
   late final List<Widget> _pages; // cache pages
   int _pageIndex = 1; // start in the middle (Home)
+  final UpdateService _updateService = UpdateService();
 
   @override
   void initState() {
     super.initState();
+    _checkForUpdates();
 
     _controller = PageController(initialPage: _pageIndex);
 
@@ -47,6 +52,66 @@ class _KioskShellState extends State<KioskShell> {
         channel: widget.channel,
       ),
     ];
+  }
+
+  Future<void> _checkForUpdates() async {
+    // Small delay to let UI build
+    await Future.delayed(const Duration(seconds: 2));
+    if (!mounted) return;
+
+    final info = await _updateService.checkForUpdate();
+    if (info != null && info['updateAvailable'] == true && mounted) {
+      _showUpdatePrompt(info);
+    }
+  }
+
+  void _showUpdatePrompt(Map<String, dynamic> info) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('New Update Available'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Version ${info['latestVersion']} is available.'),
+            const SizedBox(height: 8),
+            const Text('Release Notes:', style: TextStyle(fontWeight: FontWeight.bold)),
+            Container(
+              constraints: const BoxConstraints(maxHeight: 100),
+              child: SingleChildScrollView(
+                child: Text(info['releaseNotes'] ?? ''),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Later'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _performUpdate(info['downloadUrl']);
+            },
+            child: const Text('Update Now'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _performUpdate(String apkUrl) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => _UpdateProgressDialog(
+        stream: _updateService.runUpdate(apkUrl),
+        onDone: () => Navigator.pop(ctx),
+      ),
+    );
   }
 
   void _goTo(int index) {
@@ -144,6 +209,63 @@ class _NavButton extends StatelessWidget {
           child: Icon(icon, size: 36, color: Colors.blueGrey[800]),
         ),
       ),
+    );
+  }
+}
+
+class _UpdateProgressDialog extends StatelessWidget {
+  final Stream<OtaEvent> stream;
+  final VoidCallback onDone;
+
+  const _UpdateProgressDialog({super.key, required this.stream, required this.onDone});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<OtaEvent>(
+      stream: stream,
+      builder: (context, snapshot) {
+        String status = "Starting download...";
+        double? progress;
+
+        if (snapshot.hasError) {
+          status = "Error: ${snapshot.error}";
+        } else if (snapshot.hasData) {
+          final event = snapshot.data!;
+          status = "${event.status} ${event.value ?? ''}";
+          if (event.status == OtaStatus.DOWNLOADING) {
+             progress = (int.tryParse(event.value ?? '0') ?? 0) / 100.0;
+          }
+          if (event.status == OtaStatus.INSTALLING) {
+             progress = null; // indeterminate
+             status = "Installing...";
+          }
+        }
+
+        bool isDone = snapshot.connectionState == ConnectionState.done || snapshot.hasError;
+        if (snapshot.hasData && snapshot.data!.status.toString().contains('ERROR')) {
+           isDone = true;
+        }
+
+        return PopScope(
+          canPop: false,
+          child: AlertDialog(
+            title: const Text('Updating App'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(status),
+                const SizedBox(height: 10),
+                if (!isDone)
+                   LinearProgressIndicator(value: progress),
+              ],
+            ),
+            actions: [
+                if (isDone)
+                  TextButton(onPressed: onDone, child: const Text('Close'))
+            ],
+          ),
+        );
+      },
     );
   }
 }

@@ -26,15 +26,6 @@ class ConfigService {
     return machineUrls[type] ?? machineUrls['EPM']!;
   }
 
-  static const String _keyGitHubToken = 'github_token';
-
-  Future<String?> getGitHubToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_keyGitHubToken);
-  }
-
-  Future<void> saveGitHubToken(String token) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_keyGitHubToken, token);
-  }
+  // Baked-in Token from --dart-define
+  static const String gitHubToken = String.fromEnvironment('GITHUB_TOKEN');
 }

@@ -7,22 +7,24 @@ import 'package:path_provider/path_provider.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:ota_update/ota_update.dart'; // Keeping for UI compatibility (OtaEvent)
 import 'package:package_info_plus/package_info_plus.dart';
+import 'config_service.dart';
 
 class UpdateService {
   final String _repoOwner = 'Renewable-Energy-Systems';
   final String _repoName = 'wi-display';
 
   // Check for updates from GitHub
-  Future<Map<String, dynamic>?> checkForUpdate({String? token}) async {
+  Future<Map<String, dynamic>?> checkForUpdate() async {
     try {
       final Uri url = Uri.parse('https://api.github.com/repos/$_repoOwner/$_repoName/releases/latest');
       print('Checking GitHub update: $url');
       
+      final token = ConfigService.gitHubToken;
       final Map<String, String> headers = {
         'Accept': 'application/vnd.github+json',
       };
-      if (token != null && token.isNotEmpty) {
-        headers['Authorization'] = 'Bearer $token'; // Classic or Fine-grained token
+      if (token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token'; 
       }
 
       final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 10));
@@ -68,7 +70,7 @@ class UpdateService {
             'downloadUrl': downloadUrl, 
             'browserUrl': apkAsset['browser_download_url'], // fallback for display or public
             'releaseNotes': data['body'] ?? 'GitHub Release',
-            'isPrivate': token != null && token.isNotEmpty, // flag to use headers
+            'isPrivate': token.isNotEmpty, // flag to use headers
           };
         } else {
            return {
@@ -116,7 +118,7 @@ class UpdateService {
   }
 
   // Secure Downloader
-  Stream<OtaEvent> runUpdate(String apkUrl, {String? token, bool isPrivate = false}) async* {
+  Stream<OtaEvent> runUpdate(String apkUrl) async* {
     yield OtaEvent(OtaStatus.DOWNLOADING, '0');
 
     try {
@@ -125,12 +127,11 @@ class UpdateService {
       
       final dio = Dio();
       
-      // If private, we need headers to download from API URL
-      // API URL: https://api.github.com/repos/.../assets/ID
-      // Header: Accept: application/octet-stream
-      // Header: Authorization: Bearer TOKEN
+      final token = ConfigService.gitHubToken;
       Options options = Options();
-      if (isPrivate || (token != null && token.isNotEmpty)) {
+      
+      // Always attach token if available, assumption is we are authenticated context
+      if (token.isNotEmpty) {
         options.headers = {
            'Accept': 'application/octet-stream',
            'Authorization': 'Bearer $token',
